@@ -62,9 +62,6 @@ Fixpoint eval (e : exp) : val :=
 Definition state := list val.
 
 Inductive step : com -> state -> com -> state -> Prop :=
-| step_skip :
-    forall s, step CSkip s CSkip s
-
 | step_print :
     forall s e,
       step (CPrint e) s CSkip (s ++ [eval e])
@@ -87,7 +84,6 @@ Inductive step : com -> state -> com -> state -> Prop :=
     forall s c2,
       step (CSeq CSkip c2) s c2 s
 
-(*this rule makes the semantics nondeterministic...but that's ok!*)
 | step_cseq2 :
     forall s s' c1 c1' c2,
       step c1 s c1' s' -> 
@@ -186,14 +182,20 @@ Definition R (c : com) (s : state) (c' : com) (s' : state) :=
 Lemma com_match_skip_step_plus :
   forall c s, 
     com_match c CSkip ->
-    step_plus c s CSkip s.
+    c = CSkip \/ step_plus c s CSkip s.
 Proof.
   intros c s H; revert s.
   induction c; try solve[inversion H].
-  { intros s; constructor. constructor. }
+  { intros s; constructor. auto. }
   intros s. inversion H; subst.
-  { eapply step_trans; eauto. constructor; auto. }
-  eapply step_trans; eauto. constructor; auto.
+  { destruct (IHc1 H4 s).
+    { subst c1.
+      right. constructor. constructor. auto. }
+    right. eapply step_trans; eauto. constructor; auto. }
+  destruct (IHc2 H4 s).
+  { subst c2.
+    right. constructor. constructor. auto. }
+  right. eapply step_trans; eauto. constructor; auto.
 Qed.
 
 Lemma step_plus_seq :
@@ -237,9 +239,7 @@ Proof.
   revert d' t' H.
   destruct H1 as [H1 H2]; subst s.
   induction H2.
-  { intros d' t'; inversion 1; subst.
-    exists CSkip, t'; split; [constructor; auto|].
-    split; auto; constructor. }
+  { intros d' t'; inversion 1; subst. }
   { intros d' t'; inversion 1; subst.
     exists CSkip, (t++[eval e]); split; [constructor; auto|].
     split; auto; constructor. }
@@ -275,7 +275,11 @@ Proof.
   intros d' t'; inversion 1; subst.
   { apply (@com_match_skip_step_plus _ t') in H2_.
     exists c2, t'; split.
-    { apply step_plus_seq_CSkip; auto. }
+    { destruct H2_.
+      { subst c1.
+        constructor.
+        constructor. }
+      apply step_plus_seq_CSkip; auto. }
     split; auto. }
   destruct (@IHcom_match1 _ _ H5) as [c1'' [t'' [H7 H8]]].
   exists (CSeq c1'' c2), t''; split.
